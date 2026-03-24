@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Water Turn Tracker 💧</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f172a;
+      color: white;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 6px; text-align: center; }
+    .subtitle { color: #94a3b8; font-size: 0.9rem; margin-bottom: 28px; text-align: center; }
+
+    .card {
+      width: 100%;
+      max-width: 380px;
+      border-radius: 20px;
+      padding: 30px 24px;
+      text-align: center;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      transition: background 0.4s;
+    }
+    .card.mine   { background: linear-gradient(135deg, #1d4ed8, #2563eb); }
+    .card.brother{ background: linear-gradient(135deg, #065f46, #059669); }
+
+    .icon { font-size: 3.5rem; margin-bottom: 12px; }
+    .who  { font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; }
+    .day-label { font-size: 0.95rem; color: rgba(255,255,255,0.75); margin-bottom: 18px; }
+
+    .progress-wrap {
+      background: rgba(255,255,255,0.2);
+      border-radius: 50px;
+      height: 10px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      border-radius: 50px;
+      background: rgba(255,255,255,0.85);
+      transition: width 0.6s ease;
+    }
+    .progress-text { font-size: 0.8rem; color: rgba(255,255,255,0.7); margin-bottom: 22px; }
+
+    .next-box {
+      background: rgba(0,0,0,0.25);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.85);
+    }
+    .next-box strong { display: block; font-size: 1rem; margin-top: 4px; color: white; }
+
+    .date-row {
+      margin-top: 28px;
+      font-size: 0.8rem;
+      color: #64748b;
+      text-align: center;
+    }
+    .refresh-btn {
+      display: inline-block;
+      margin-top: 20px;
+      background: #1e293b;
+      border: none;
+      color: #94a3b8;
+      padding: 8px 20px;
+      border-radius: 50px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .refresh-btn:hover { background: #334155; }
+
+    .week-grid {
+      display: flex;
+      gap: 7px;
+      justify-content: center;
+      margin-top: 22px;
+    }
+    .day-dot {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: white;
+      flex-direction: column;
+    }
+    .day-dot.mine-dot     { background: #2563eb; }
+    .day-dot.brother-dot  { background: #059669; }
+    .day-dot.today-ring   { outline: 3px solid white; outline-offset: 2px; }
+    .dot-label { font-size: 0.55rem; margin-top: 2px; }
+  </style>
+</head>
+<body>
+
+  <h1>💧 Water Turn Tracker</h1>
+  <p class="subtitle">Vihir Water Share — 4 days : 2 days</p>
+
+  <div class="card" id="card">
+    <div class="icon" id="icon">💧</div>
+    <div class="who" id="who">Loading...</div>
+    <div class="day-label" id="dayLabel"></div>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progressBar" style="width:0%"></div>
+    </div>
+    <div class="progress-text" id="progressText"></div>
+    <div class="next-box" id="nextBox"></div>
+  </div>
+
+  <div class="week-grid" id="weekGrid"></div>
+
+  <div class="date-row" id="dateRow"></div>
+  <button class="refresh-btn" onclick="init()">🔄 Refresh</button>
+
+<script>
+  // === CONFIG ===
+  // To make Today (March 24) Day 1 of Amol's turn, we set the reference start 
+  // of Suraj's 4-day turn 4 days ago (March 20, 2026).
+  const CYCLE_REF = new Date('2026-03-20T00:00:00+05:30');
+  const MY_DAYS      = 4;
+  const BROTHER_DAYS = 2;
+  const CYCLE_LEN    = MY_DAYS + BROTHER_DAYS; // 6
+
+  const MY_NAME      = "Suraj\'s Turn 🌊";
+  const BROTHER_NAME = "Amol\'s Turn 🌿";
+  const DAY_NAMES    = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  function getTodayIST() {
+    const now = new Date();
+    // IST offset +5:30
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const ist = new Date(utc + istOffset);
+    return new Date(ist.getFullYear(), ist.getMonth(), ist.getDate());
+  }
+
+  function getDayInCycle(date) {
+    const ref = new Date(CYCLE_REF.getFullYear(), CYCLE_REF.getMonth(), CYCLE_REF.getDate());
+    const diffMs = date - ref;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    return ((diffDays % CYCLE_LEN) + CYCLE_LEN) % CYCLE_LEN;
+  }
+
+  function isMine(dayInCycle) {
+    return dayInCycle < MY_DAYS;
+  }
+
+  function formatDate(d) {
+    return d.toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short' });
+  }
+
+  function addDays(d, n) {
+    const r = new Date(d);
+    r.setDate(r.getDate() + n);
+    return r;
+  }
+
+  function init() {
+    const today      = getTodayIST();
+    const cycleDay   = getDayInCycle(today);
+    const mine       = isMine(cycleDay);
+
+    const card       = document.getElementById('card');
+    const icon       = document.getElementById('icon');
+    const who        = document.getElementById('who');
+    const dayLabel   = document.getElementById('dayLabel');
+    const bar        = document.getElementById('progressBar');
+    const progText   = document.getElementById('progressText');
+    const nextBox    = document.getElementById('nextBox');
+    const dateRow    = document.getElementById('dateRow');
+    const weekGrid   = document.getElementById('weekGrid');
+
+    if (mine) {
+      card.className = 'card mine';
+      icon.textContent = '🌊';
+      who.textContent  = MY_NAME;
+      const dayNum = cycleDay + 1;
+      dayLabel.textContent = `Day ${dayNum} of Suraj\'s ${MY_DAYS}-day turn`;
+      const pct = Math.round((dayNum / MY_DAYS) * 100);
+      bar.style.width = pct + '%';
+      progText.textContent = `${dayNum} / ${MY_DAYS} days used`;
+
+      const daysLeft = MY_DAYS - dayNum;
+      const brotherStart = addDays(today, daysLeft + 1);
+      nextBox.innerHTML = `Next: Amol\'s turn starts<br><strong>${formatDate(brotherStart)} (${BROTHER_DAYS} days)</strong>`;
+    } else {
+      card.className = 'card brother';
+      icon.textContent = '🌿';
+      who.textContent  = BROTHER_NAME;
+      const dayNum = cycleDay - MY_DAYS + 1;
+      dayLabel.textContent = `Day ${dayNum} of Amol\'s ${BROTHER_DAYS}-day turn`;
+      const pct = Math.round((dayNum / BROTHER_DAYS) * 100);
+      bar.style.width = pct + '%';
+      progText.textContent = `${dayNum} / ${BROTHER_DAYS} days used`;
+
+      const daysLeft = BROTHER_DAYS - dayNum;
+      const myStart = addDays(today, daysLeft + 1);
+      nextBox.innerHTML = `Next: Suraj\'s turn starts<br><strong>${formatDate(myStart)} (${MY_DAYS} days)</strong>`;
+    }
+
+    // === 6-day week grid ===
+    weekGrid.innerHTML = '';
+    for (let i = 0; i < CYCLE_LEN; i++) {
+      const d   = addDays(today, i - getDayInCycle(today));
+      const cyc = getDayInCycle(d);
+      const isMe = isMine(cyc);
+      const isToday = (i === getDayInCycle(today));
+      const dot = document.createElement('div');
+      dot.className = 'day-dot ' + (isMe ? 'mine-dot' : 'brother-dot') + (isToday ? ' today-ring' : '');
+      dot.innerHTML = DAY_NAMES[d.getDay()] + '<span class="dot-label">' + (isMe ? 'Suraj' : 'Amol') + '</span>';
+      weekGrid.appendChild(dot);
+    }
+
+    dateRow.textContent = 'Today: ' + formatDate(today) + ' | IST';
+  }
+
+  // Run on load
+  init();
+</script>
+</body>
+</html>
